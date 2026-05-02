@@ -4,7 +4,7 @@ import requests
 import json
 import os
 
-# Путь к файлу избранных пользователей (заменено с favorites.json на izbr.json)
+# Путь к файлу избранных пользователей
 FAVORITES_FILE = "izbr.json"
 
 class GitHubUserFinder:
@@ -13,7 +13,7 @@ class GitHubUserFinder:
         self.root.title("GitHub User Finder")
         self.root.geometry("600x500")
 
-        # Загрузка избранных пользователей
+        # Загрузка избранных пользователей с обработкой ошибок
         self.favorites = self.load_favorites()
 
         # Интерфейс
@@ -63,16 +63,26 @@ class GitHubUserFinder:
 
         try:
             response = requests.get(f"https://api.github.com/users/{username}")
+
             if response.status_code == 200:
                 user_data = response.json()
                 self.display_user(user_data)
+            elif response.status_code == 404:
+                messagebox.showerror("Ошибка", "Пользователь не найден (код: 404)")
+            elif response.status_code == 403:
+                messagebox.showerror(
+                    "Ошибка",
+                    "Превышен лимит запросов к API GitHub (код: 403). Попробуйте позже или используйте токен аутентификации."
+                )
             else:
                 messagebox.showerror(
                     "Ошибка",
-                    f"Пользователь не найден (код: {response.status_code})"
+            f"Произошла ошибка при запросе к API (код: {response.status_code})"
                 )
+        except requests.exceptions.ConnectionError:
+            messagebox.showerror("Ошибка", "Нет подключения к интернету. Проверьте соединение.")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
+            messagebox.showerror("Ошибка", f"Произошла непредвиденная ошибка: {e}")
 
     def display_user(self, user_data):
         self.results_listbox.delete(0, tk.END)
@@ -110,9 +120,21 @@ class GitHubUserFinder:
 
     def load_favorites(self):
         if os.path.exists(FAVORITES_FILE):
-            with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return []
+            try:
+                with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                return json.loads(content)
+            else:
+                # Файл существует, но пустой — инициализируем пустым массивом
+                return []
+            except json.JSONDecodeError:
+                # Если файл содержит некорректный JSON, сбрасываем его
+                print(f"Предупреждение: файл {FAVORITES_FILE} содержит некорректный JSON. Создаём новый.")
+                return []
+        else:
+            # Файл не существует — создаём пустой список
+            return []
 
     def save_favorites(self):
         with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
@@ -127,4 +149,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = GitHubUserFinder(root)
     root.mainloop()
-
